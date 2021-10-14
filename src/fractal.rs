@@ -6,7 +6,7 @@ use wgpu::util::DeviceExt;
 const MAX_ROOTS: usize = 10;
 const MAX_COEFFICIENTS: usize = 1 + MAX_ROOTS;
 
-pub(crate) struct FractalRenderer {
+pub struct FractalRenderer {
     gfx: GraphicsContext,
     params_buffer: wgpu::Buffer,
     render_pipeline: wgpu::RenderPipeline,
@@ -14,7 +14,7 @@ pub(crate) struct FractalRenderer {
 }
 
 impl FractalRenderer {
-    pub(crate) fn new(gfx: &GraphicsContext) -> Self {
+    pub fn new(gfx: &GraphicsContext) -> Self {
         let params_buffer = gfx
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -101,11 +101,7 @@ impl FractalRenderer {
         }
     }
 
-    pub(crate) fn draw(
-        &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        frame_view: &wgpu::TextureView,
-    ) {
+    pub fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, frame_view: &wgpu::TextureView) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("FractalRenderer.render_pass"),
             color_attachments: &[wgpu::RenderPassColorAttachment {

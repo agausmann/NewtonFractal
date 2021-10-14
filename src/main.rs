@@ -3,6 +3,7 @@ use std::{cell::Cell, sync::Arc};
 use anyhow::Context;
 use fractal::FractalRenderer;
 use pollster::block_on;
+use ui::UiRenderer;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, StartCause, WindowEvent},
@@ -10,19 +11,20 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-pub(crate) mod fractal;
+pub mod fractal;
+pub mod ui;
 
-pub(crate) type GraphicsContext = Arc<GraphicsContextInner>;
+pub type GraphicsContext = Arc<GraphicsContextInner>;
 
-pub(crate) struct GraphicsContextInner {
-    pub(crate) window: Window,
-    pub(crate) instance: wgpu::Instance,
-    pub(crate) surface: wgpu::Surface,
-    pub(crate) adapter: wgpu::Adapter,
-    pub(crate) device: wgpu::Device,
-    pub(crate) queue: wgpu::Queue,
-    pub(crate) render_format: wgpu::TextureFormat,
-    pub(crate) surface_size: Cell<PhysicalSize<u32>>,
+pub struct GraphicsContextInner {
+    pub window: Window,
+    pub instance: wgpu::Instance,
+    pub surface: wgpu::Surface,
+    pub adapter: wgpu::Adapter,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub render_format: wgpu::TextureFormat,
+    pub surface_size: Cell<PhysicalSize<u32>>,
 }
 
 impl GraphicsContextInner {
@@ -77,22 +79,25 @@ impl GraphicsContextInner {
     }
 }
 
-pub(crate) struct App {
+pub struct App {
     gfx: GraphicsContext,
     fractal_renderer: FractalRenderer,
+    ui_renderer: UiRenderer,
 }
 
 impl App {
-    pub(crate) async fn new(window: Window) -> anyhow::Result<Self> {
+    pub async fn new(window: Window) -> anyhow::Result<Self> {
         let gfx = Arc::new(GraphicsContextInner::new(window).await?);
-        let fractal = FractalRenderer::new(&gfx);
+        let fractal_renderer = FractalRenderer::new(&gfx);
+        let ui_renderer = UiRenderer::new(&gfx);
         Ok(Self {
             gfx,
-            fractal_renderer: fractal,
+            fractal_renderer,
+            ui_renderer,
         })
     }
 
-    pub(crate) fn redraw(&mut self) -> anyhow::Result<()> {
+    pub fn redraw(&mut self) -> anyhow::Result<()> {
         let frame = loop {
             match self.gfx.surface.get_current_frame() {
                 Ok(frame) => break frame.output,
@@ -111,6 +116,7 @@ impl App {
         let frame_view = frame.texture.create_view(&Default::default());
         let mut encoder = self.gfx.device.create_command_encoder(&Default::default());
         self.fractal_renderer.draw(&mut encoder, &frame_view);
+        self.ui_renderer.draw(&mut encoder, &frame_view);
         self.gfx.queue.submit([encoder.finish()]);
 
         Ok(())
