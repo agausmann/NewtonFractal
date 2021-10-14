@@ -33,8 +33,8 @@ impl GraphicsContextInner {
         let surface = unsafe { instance.create_surface(&window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: Default::default(),
                 compatible_surface: Some(&surface),
+                ..Default::default()
             })
             .await
             .context("failed to create adapter")?;
@@ -99,8 +99,8 @@ impl App {
 
     pub fn redraw(&mut self) -> anyhow::Result<()> {
         let frame = loop {
-            match self.gfx.surface.get_current_frame() {
-                Ok(frame) => break frame.output,
+            match self.gfx.surface.get_current_texture() {
+                Ok(frame) => break frame,
                 Err(wgpu::SurfaceError::Lost) => {
                     self.gfx.reconfigure();
                 }
@@ -118,6 +118,7 @@ impl App {
         self.fractal_renderer.draw(&mut encoder, &frame_view);
         self.ui_renderer.draw(&mut encoder, &frame_view);
         self.gfx.queue.submit([encoder.finish()]);
+        frame.present();
 
         Ok(())
     }

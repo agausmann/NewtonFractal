@@ -57,7 +57,7 @@ struct Root {
     // Position of this root on the complex plane.
     position: vec2<f32>;
 
-    _padding: vec2<f32>;
+    padding: vec2<f32>;
 };
 [[block]] struct Params {
     // How many Newton-Raphson iterations to perform.
