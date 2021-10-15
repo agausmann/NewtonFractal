@@ -678,6 +678,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "imgui-wgpu"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05b9d1b0fa2cd677776a295e0e69a40b4b6569d73ed6bd380082446cdf9b4ef5"
+dependencies = [
+ "bytemuck",
+ "imgui",
+ "log",
+ "smallvec",
+ "wgpu",
+]
+
+[[package]]
+name = "imgui-winit-support"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86a8c368182829141da5d22c352684d01e64359daa1a4550df4a2976836aa8e3"
+dependencies = [
+ "imgui",
+ "winit",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -939,6 +962,8 @@ dependencies = [
  "env_logger",
  "glam",
  "imgui",
+ "imgui-wgpu",
+ "imgui-winit-support",
  "pollster",
  "wgpu",
  "winit",

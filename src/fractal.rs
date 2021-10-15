@@ -1,6 +1,6 @@
-use crate::GraphicsContext;
+use crate::{config::Config, GraphicsContext};
 use bytemuck::{Pod, Zeroable};
-use glam::{Vec2, Vec4};
+use glam::Vec2;
 use wgpu::util::DeviceExt;
 
 const MAX_ROOTS: usize = 10;
@@ -20,22 +20,7 @@ impl FractalRenderer {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("FractalRenderer.params_buffer"),
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-                contents: Params::default()
-                    .roots(&[
-                        Root {
-                            position: from_polar(0.5, 0.0_f32.to_radians()),
-                            color: Vec4::new(0.0, 1.0, 1.0, 1.0) * 0.8,
-                        },
-                        Root {
-                            position: from_polar(0.5, 120.0_f32.to_radians()),
-                            color: Vec4::new(1.0, 0.0, 1.0, 1.0) * 0.8,
-                        },
-                        Root {
-                            position: from_polar(0.5, 240.0_f32.to_radians()),
-                            color: Vec4::new(1.0, 1.0, 0.0, 1.0) * 0.8,
-                        },
-                    ])
-                    .as_bytes(),
+                contents: bytemuck::bytes_of(&ParamsAbi::from(&Config::default())),
             });
         let bind_group_layout =
             gfx.device
@@ -101,7 +86,17 @@ impl FractalRenderer {
         }
     }
 
-    pub fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, frame_view: &wgpu::TextureView) {
+    pub fn draw(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        frame_view: &wgpu::TextureView,
+        config: &Config,
+    ) {
+        self.gfx.queue.write_buffer(
+            &self.params_buffer,
+            0,
+            bytemuck::bytes_of(&ParamsAbi::from(config)),
+        );
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("FractalRenderer.render_pass"),
             color_attachments: &[wgpu::RenderPassColorAttachment {
@@ -117,99 +112,8 @@ impl FractalRenderer {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Params {
-    abi: ParamsAbi,
-}
-
-impl Params {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn num_iterations(mut self, num_iterations: u32) -> Self {
-        self.abi.num_iterations = num_iterations;
-        self
-    }
-
-    pub fn viewport(mut self, top_left: Vec2, bottom_right: Vec2) -> Self {
-        self.abi.viewport_min = top_left.into();
-        self.abi.viewport_max = bottom_right.into();
-        self
-    }
-
-    pub fn roots(mut self, roots: &[Root]) -> Self {
-        assert!(
-            roots.len() < MAX_ROOTS,
-            "too many roots, must be at most {}",
-            MAX_ROOTS
-        );
-        self.abi.num_roots = roots.len() as _;
-
-        for (slot, root) in self.abi.roots.iter_mut().zip(roots) {
-            slot.position = root.position.into();
-            slot.color = root.color.into();
-        }
-
-        // Compute coefficients:
-        let mut p = [Vec2::ZERO; MAX_COEFFICIENTS];
-        p[0] = Vec2::new(1.0, 0.0);
-        for root in roots {
-            let mut q = p.clone();
-            // Multiply p by x (shift forward)
-            for i in (1..MAX_COEFFICIENTS).rev() {
-                p[i] = p[i - 1];
-            }
-            p[0] = Vec2::ZERO;
-            // Multiply q by root
-            for term in &mut q {
-                *term = complex_mul(*term, root.position)
-            }
-            // Element-wise subtract q from p
-            for (a, b) in p.iter_mut().zip(&q) {
-                *a -= *b;
-            }
-        }
-        for (slot, coef) in self.abi.coefficients.iter_mut().zip(p) {
-            *slot = coef.into();
-        }
-
-        self
-    }
-
-    fn as_bytes(&self) -> &[u8] {
-        bytemuck::bytes_of(&self.abi)
-    }
-}
-
 fn complex_mul(a: Vec2, b: Vec2) -> Vec2 {
     Vec2::new(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x)
-}
-
-pub struct Root {
-    pub position: Vec2,
-    pub color: Vec4,
-}
-
-impl Default for Params {
-    fn default() -> Self {
-        Self {
-            abi: ParamsAbi {
-                num_iterations: 10,
-                _padding: [0u8; 4],
-                viewport_min: [-1.0, 1.0],
-                viewport_max: [1.0, -1.0],
-                num_roots: 0,
-                _padding_2: [0u8; 4],
-                roots: [RootAbi {
-                    color: [0.0; 4],
-                    position: [0.0; 2],
-                    _padding: [0; 8],
-                }; MAX_ROOTS],
-                coefficients: [[0.0; 2]; MAX_COEFFICIENTS],
-            },
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -233,6 +137,54 @@ struct RootAbi {
     _padding: [u8; 8],
 }
 
-fn from_polar(r: f32, theta: f32) -> Vec2 {
-    return r * Vec2::new(theta.cos(), theta.sin());
+impl From<&Config> for ParamsAbi {
+    fn from(config: &Config) -> Self {
+        assert!(
+            config.roots.len() < MAX_ROOTS,
+            "too many roots, must be at most {}",
+            MAX_ROOTS
+        );
+
+        let mut roots = [RootAbi::zeroed(); MAX_ROOTS];
+        let mut coefficients = [<[f32; 2]>::zeroed(); MAX_COEFFICIENTS];
+
+        for (slot, root) in roots.iter_mut().zip(&config.roots) {
+            slot.position = root.position.into();
+            slot.color = root.color.into();
+        }
+
+        // Compute coefficients:
+        let mut p = [Vec2::ZERO; MAX_COEFFICIENTS];
+        p[0] = Vec2::new(1.0, 0.0);
+        for root in &config.roots {
+            let mut q = p.clone();
+            // Multiply p by x (shift forward)
+            for i in (1..MAX_COEFFICIENTS).rev() {
+                p[i] = p[i - 1];
+            }
+            p[0] = Vec2::ZERO;
+            // Multiply q by root
+            for term in &mut q {
+                *term = complex_mul(*term, root.position)
+            }
+            // Element-wise subtract q from p
+            for (a, b) in p.iter_mut().zip(&q) {
+                *a -= *b;
+            }
+        }
+        for (slot, coef) in coefficients.iter_mut().zip(p) {
+            *slot = coef.into();
+        }
+
+        Self {
+            num_iterations: config.num_iterations,
+            _padding: [0; 4],
+            viewport_min: [-1.0, 1.0],
+            viewport_max: [1.0, -1.0],
+            num_roots: config.roots.len() as u32,
+            _padding_2: [0; 4],
+            roots,
+            coefficients,
+        }
+    }
 }

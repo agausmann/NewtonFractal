@@ -131,7 +131,7 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     // Initial position, projecting the UV coordinate onto the viewport:
     var position: vec2<f32> = params.viewport_min + in.uv * (params.viewport_max - params.viewport_min);
 
-    for (var i: u32 = 0u; i < 30u; i = i + 1u) {
+    for (var i: u32 = 0u; i < params.num_iterations; i = i + 1u) {
         position = position - complex_mul(poly(position), inverse(grad(position)));
     }
 
