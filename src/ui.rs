@@ -50,10 +50,12 @@ impl UiRenderer {
             .handle_event(self.imgui.io_mut(), &self.gfx.window, &event)
     }
 
-    pub fn prepare(&mut self) -> anyhow::Result<()> {
-        self.platform
-            .prepare_frame(self.imgui.io_mut(), &self.gfx.window)?;
-        Ok(())
+    pub fn has_keyboard_focus(&self) -> bool {
+        self.imgui.io().want_capture_keyboard
+    }
+
+    pub fn has_mouse_focus(&self) -> bool {
+        self.imgui.io().want_capture_mouse
     }
 
     pub fn draw(
@@ -91,7 +93,11 @@ impl UiRenderer {
                         config_change(ConfigChangeEvent::CameraPosition(position.into()));
                     };
                     let mut zoom = config.camera.zoom;
-                    if ui.input_float("Zoom", &mut zoom).build() {
+                    if ui
+                        .input_float("Zoom", &mut zoom)
+                        .step(config.camera.zoom * 0.01)
+                        .build()
+                    {
                         config_change(ConfigChangeEvent::CameraZoom(zoom));
                     };
                 }
