@@ -28,7 +28,7 @@ impl FractalRenderer {
                     label: Some("FractalRenderer.bind_group_layout"),
                     entries: &[wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -121,10 +121,10 @@ fn complex_mul(a: Vec2, b: Vec2) -> Vec2 {
 struct ParamsAbi {
     num_iterations: u32,
     _padding: [u8; 4],
-    viewport_min: [f32; 2],
-    viewport_max: [f32; 2],
+    camera_position: [f32; 2],
+    camera_zoom: f32,
     num_roots: u32,
-    _padding_2: [u8; 4],
+    _padding_2: [u8; 8],
     roots: [RootAbi; MAX_ROOTS],
     coefficients: [[f32; 2]; MAX_COEFFICIENTS],
 }
@@ -177,12 +177,12 @@ impl From<&Config> for ParamsAbi {
         }
 
         Self {
-            num_iterations: config.num_iterations,
             _padding: [0; 4],
-            viewport_min: [-1.0, 1.0],
-            viewport_max: [1.0, -1.0],
+            _padding_2: [0; 8],
+            num_iterations: config.num_iterations,
+            camera_position: config.camera.position.into(),
+            camera_zoom: config.camera.zoom,
             num_roots: config.roots.len() as u32,
-            _padding_2: [0; 4],
             roots,
             coefficients,
         }
